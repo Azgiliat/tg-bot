@@ -93,6 +93,7 @@ func (bot *TgBot) sendPostRequest(url string, payload Payload) ([]byte, error) {
 
 	buff := bytes.NewBuffer(body)
 	res, err := http.Post(url, "application/json", buff)
+	defer res.Body.Close()
 
 	if err != nil {
 		log.Println("post request failed")
@@ -120,6 +121,7 @@ func (bot *TgBot) sendPostRequest(url string, payload Payload) ([]byte, error) {
 func (bot *TgBot) sendGetRequest(url string) ([]byte, error) {
 	res, err := http.Get(url)
 	statusCode := res.StatusCode
+	defer res.Body.Close()
 
 	if err != nil || statusCode != http.StatusOK {
 		log.Println("get request failed")
