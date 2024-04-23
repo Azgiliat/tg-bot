@@ -3,9 +3,10 @@ package main
 import (
 	"awesomeProject/internal/bot"
 	"awesomeProject/internal/config"
+	"awesomeProject/internal/ctx"
 	db2 "awesomeProject/internal/db"
 	"awesomeProject/internal/updates_handler"
-	"context"
+	"log"
 	"os"
 	"os/signal"
 	"syscall"
@@ -13,7 +14,14 @@ import (
 
 func main() {
 	config.LoadEnv()
+
 	doneCh := make(chan os.Signal, 1)
+	signal.Notify(doneCh, syscall.SIGINT, syscall.SIGTERM)
+
+	ctx.InitRootCtx()
+	defer func() {
+		ctx.GetRootCtx().Cancel()
+	}()
 
 	dbConfig := config.GetDBConfig()
 	db, err := db2.InitDb(dbConfig)
@@ -26,10 +34,10 @@ func main() {
 	tgConfig := config.GetTgConfig()
 	telegram := bot.NewBot(tgConfig.Token)
 	updatesChan := telegram.GetUpdatesChannel()
-	updates_handler.NewConsumer(updatesChan, telegram)
+	go updates_handler.NewConsumer(updatesChan, telegram)
 
-	signal.Notify(doneCh, syscall.SIGINT, syscall.SIGTERM)
-	<-doneCh
-	_, cancel := context.WithCancel(context.Background())
-	defer cancel()
+	select {
+	case <-doneCh:
+		log.Println("finished")
+	}
 }
