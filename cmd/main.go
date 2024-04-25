@@ -34,7 +34,7 @@ func main() {
 	tgConfig := config.GetTgConfig()
 	telegram := bot.NewBot(tgConfig.Token)
 	updatesChan := telegram.GetUpdatesChannel()
-	go updates_handler.NewConsumer(updatesChan, telegram)
+	go updates_handler.NewHandler(updatesChan, telegram)
 
 	select {
 	case <-doneCh:

@@ -1,6 +1,7 @@
 package repository
 
 import (
+	ctx2 "awesomeProject/internal/ctx"
 	"awesomeProject/internal/db"
 	"awesomeProject/internal/types"
 	"context"
@@ -30,6 +31,22 @@ func (repo *CatRepository) checkDBInRepository() bool {
 	}
 
 	return true
+}
+
+func executeWithTimeout[T interface{}](cb func(args ...interface{}) T) (*T, error) {
+	result := make(chan T, 1)
+	rootCtx := ctx2.GetRootCtx()
+	timeoutCtx, cancel := context.WithTimeout(rootCtx.Context, 5*time.Second)
+	defer cancel()
+
+	go func() { result <- cb() }()
+
+	select {
+	case r := <-result:
+		return &r, nil
+	case <-timeoutCtx.Done():
+		return nil, errors.New("timeout expired")
+	}
 }
 
 func NewCatRepository(db *sql.DB) *CatRepository {
@@ -96,14 +113,16 @@ func (repo *CatRepository) GetCatByTag(tag string) *types.CatPhoto {
 
 func (repo *CatRepository) StoreCat(tag string, link string) error {
 	var photoId, tagId int
-	needToInsertNewtag := false
+
+	rootCtx := ctx2.GetRootCtx()
+	needToInsertNewTag := false
 	isDBAlive := repo.checkDBInRepository()
 
 	if !isDBAlive {
 		return errors.New("DB not alive")
 	}
 
-	ctx, cancel := context.WithTimeout(context.TODO(), 5*time.Second)
+	ctx, cancel := context.WithTimeout(rootCtx.Context, 5*time.Second)
 	defer cancel()
 
 	tx, err := repo.db.BeginTx(ctx, nil)
@@ -126,7 +145,7 @@ func (repo *CatRepository) StoreCat(tag string, link string) error {
 
 	if err != nil {
 		if errors.Is(err, sql.ErrNoRows) {
-			needToInsertNewtag = true
+			needToInsertNewTag = true
 		} else {
 			tx.Rollback()
 
@@ -134,7 +153,7 @@ func (repo *CatRepository) StoreCat(tag string, link string) error {
 		}
 	}
 
-	if needToInsertNewtag {
+	if needToInsertNewTag {
 		row = tx.QueryRowContext(ctx, `INSERT INTO tag ("name") VALUES ($1) returning id`, tag)
 		err = row.Scan(&tagId)
 
